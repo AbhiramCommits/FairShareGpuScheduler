@@ -19,127 +19,285 @@ package plugin
 import (
 	"context"
 	"fmt"
-	"sync"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	framework "k8s.io/kubernetes/pkg/scheduler/framework"
+
 	"github.com/abhiramkasireddi/fairshare-gpu-scheduler/pkg/fairshare"
 	"github.com/abhiramkasireddi/fairshare-gpu-scheduler/pkg/topology"
 )
 
+// Name is the scheduler plugin name registered with the framework.
 const Name = "FairShareGPU"
 
+// GPUResourceName is the extended resource used for GPU accounting.
+const GPUResourceName = "nvidia.com/gpu"
+
+// FairShareGPU is the scheduler-framework plugin implementing hierarchical
+// quota admission, topology-aware scoring and guarantee-safe preemption.
 type FairShareGPU struct {
-	mu         sync.Mutex
-	tree       *fairshare.QueueNode
-	capacity   fairshare.ResourceVec
-	nodeStates map[string]topology.NodeGPUState
+	handle   framework.Handle
+	registry *Registry
 }
 
-func New(_ context.Context, _ runtime.Object, _ interface{}) (interface{}, error) {
-	root := &fairshare.QueueNode{
-		Name:          "root",
-		Weight:        1,
-		Guaranteed:    fairshare.ResourceVec{"nvidia.com/gpu": 32},
-		BorrowLimit:   fairshare.ResourceVec{"nvidia.com/gpu": 32},
-		Allocated:     make(fairshare.ResourceVec),
-		Children: []*fairshare.QueueNode{
-			{
-				Name:          "default-queue",
-				Parent:        "root",
-				Weight:        1,
-				Guaranteed:    fairshare.ResourceVec{"nvidia.com/gpu": 32},
-				BorrowLimit:   fairshare.ResourceVec{"nvidia.com/gpu": 32},
-				Allocated:     make(fairshare.ResourceVec),
-				Preemptible:   true,
-				Reclaimable:   true,
-			},
-		},
+var _ framework.PreFilterPlugin = &FairShareGPU{}
+var _ framework.FilterPlugin = &FairShareGPU{}
+var _ framework.ScorePlugin = &FairShareGPU{}
+var _ framework.PostFilterPlugin = &FairShareGPU{}
+var _ framework.ReservePlugin = &FairShareGPU{}
+
+// New constructs the plugin. It satisfies the framework.PluginFactory signature
+// used by app.WithPlugin.
+func New(_ context.Context, _ runtime.Object, handle framework.Handle) (framework.Plugin, error) {
+	reg := NewRegistry()
+	root := fairshare.QueueSpec{
+		Name:        "root",
+		Weight:      1,
+		Guaranteed:  fairshare.ResourceVec{GPUResourceName: 32},
+		BorrowLimit: fairshare.ResourceVec{GPUResourceName: 32},
 	}
-	return &FairShareGPU{
-		tree:       root,
-		capacity:   fairshare.ResourceVec{"nvidia.com/gpu": 32},
-		nodeStates: make(map[string]topology.NodeGPUState),
-	}, nil
+	def := fairshare.QueueSpec{
+		Name:        "default-queue",
+		Parent:      "root",
+		Weight:      1,
+		Guaranteed:  fairshare.ResourceVec{GPUResourceName: 32},
+		BorrowLimit: fairshare.ResourceVec{GPUResourceName: 32},
+		Preemptible: true,
+		Reclaimable: true,
+	}
+	_ = reg.SetQueues([]fairshare.QueueSpec{root, def})
+	reg.SetCapacity(fairshare.ResourceVec{GPUResourceName: 0})
+	return &FairShareGPU{handle: handle, registry: reg}, nil
 }
 
-func (pl *FairShareGPU) Name() string {
-	return Name
-}
+// Registry exposes the plugin's shared state for external configuration and tests.
+func (pl *FairShareGPU) Registry() *Registry { return pl.registry }
 
-func (pl *FairShareGPU) PreFilter(ctx context.Context, pod *v1.Pod) (string, error) {
-	pl.mu.Lock()
-	defer pl.mu.Unlock()
+// Name returns the plugin name.
+func (pl *FairShareGPU) Name() string { return Name }
 
-	queueName := pod.Labels["fairshare.io/queue"]
+// PreFilter resolves the pod's queue via QueueBinding and enforces CanAdmit.
+func (pl *FairShareGPU) PreFilter(_ context.Context, _ *framework.CycleState, pod *v1.Pod) (*framework.PreFilterResult, *framework.Status) {
+	queueName := pl.registry.ResolveQueue(pod)
 	if queueName == "" {
 		queueName = "default-queue"
 	}
-
-	queueNode := findQueueNode(pl.tree, queueName)
-	if queueNode == nil {
-		return "", fmt.Errorf("queue %s not found", queueName)
+	q := FindQueue(pl.registry.Tree(), queueName)
+	if q == nil {
+		return nil, framework.NewStatus(framework.Unschedulable, fmt.Sprintf("queue %q not found", queueName))
 	}
-
-	reqGPUs := getPodGPURequest(pod)
-	req := fairshare.ResourceVec{"nvidia.com/gpu": float64(reqGPUs)}
-
-	ok, _, reason := fairshare.CanAdmit(queueNode, req)
+	req := fairshare.ResourceVec{GPUResourceName: float64(podGPURequest(pod))}
+	ok, _, reason := fairshare.CanAdmit(q, req)
 	if !ok {
-		return "", fmt.Errorf("queue admission denied: %s", reason)
+		return nil, framework.NewStatus(framework.Unschedulable, "queue admission denied: "+reason)
 	}
-
-	return "", nil
+	return nil, nil
 }
 
-func (pl *FairShareGPU) Filter(ctx context.Context, pod *v1.Pod, nodeName string, freeGPUs int) bool {
-	pl.mu.Lock()
-	defer pl.mu.Unlock()
+// PreFilterExtensions returns nil; this plugin does not implement remove.
+func (pl *FairShareGPU) PreFilterExtensions() framework.PreFilterExtensions { return nil }
 
-	reqGPUs := getPodGPURequest(pod)
-	return freeGPUs >= reqGPUs
+// Filter rejects nodes without enough free GPU.
+func (pl *FairShareGPU) Filter(_ context.Context, _ *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+	if nodeInfo == nil || nodeInfo.Node() == nil {
+		return framework.NewStatus(framework.Error, "node info missing")
+	}
+	node := nodeInfo.Node()
+	if freeGPUsOnNode(node, nodeInfo) < podGPURequest(pod) {
+		return framework.NewStatus(framework.Unschedulable, "insufficient free GPUs on node "+node.Name)
+	}
+	return nil
 }
 
-func (pl *FairShareGPU) Score(ctx context.Context, pod *v1.Pod, nodeName string) int64 {
-	pl.mu.Lock()
-	defer pl.mu.Unlock()
+// Score delegates to topology-aware scoring.
+func (pl *FairShareGPU) Score(_ context.Context, _ *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
+	ns, ok := pl.registry.NodeState(nodeName)
+	if !ok {
+		ns = topology.NodeGPUState{NodeName: nodeName, FreeGPUs: 8, TotalGPUs: 8, NVLinkGroup: "group-0", NUMANode: "0"}
+	}
+	return topology.ScoreNode(podGPURequest(pod), ns), nil
+}
 
-	reqGPUs := getPodGPURequest(pod)
-	ns, exists := pl.nodeStates[nodeName]
-	if !exists {
-		ns = topology.NodeGPUState{
-			NodeName:    nodeName,
-			FreeGPUs:    8,
-			TotalGPUs:   8,
-			NVLinkGroup: "group-0",
-			NUMANode:    "0",
+// ScoreExtensions returns this plugin to enable NormalizeScore.
+func (pl *FairShareGPU) ScoreExtensions() framework.ScoreExtensions { return pl }
+
+// NormalizeScore clamps scores into the framework's 0-100 range.
+func (pl *FairShareGPU) NormalizeScore(_ context.Context, _ *framework.CycleState, _ *v1.Pod, scores framework.NodeScoreList) *framework.Status {
+	for i := range scores {
+		if scores[i].Score > framework.MaxNodeScore {
+			scores[i].Score = framework.MaxNodeScore
 		}
-	}
-
-	return topology.ScoreNode(reqGPUs, ns)
-}
-
-func findQueueNode(n *fairshare.QueueNode, name string) *fairshare.QueueNode {
-	if n.Name == name {
-		return n
-	}
-	for _, child := range n.Children {
-		if found := findQueueNode(child, name); found != nil {
-			return found
+		if scores[i].Score < framework.MinNodeScore {
+			scores[i].Score = framework.MinNodeScore
 		}
 	}
 	return nil
 }
 
-func getPodGPURequest(pod *v1.Pod) int {
+// PostFilter performs preemption: it selects guarantee-safe victims from
+// over-quota, preemptible queues and emits a nomination for the preemption node.
+func (pl *FairShareGPU) PostFilter(_ context.Context, _ *framework.CycleState, pod *v1.Pod, filtered framework.NodeToStatusMap) (*framework.PostFilterResult, *framework.Status) {
+	needed := podGPURequest(pod)
+	candidates := pl.gatherCandidates(filtered)
+	victims, ok := SelectVictims(candidates, needed)
+	if !ok {
+		return nil, framework.NewStatus(framework.Unschedulable, "no guarantee-safe victim found")
+	}
+	node := victimNode(victims)
+	if node == "" {
+		return nil, framework.NewStatus(framework.Unschedulable, "no node fits after preemption")
+	}
+	return framework.NewPostFilterResultWithNominatedNode(node), nil
+}
+
+// Reserve updates in-memory per-queue allocation under a lock.
+func (pl *FairShareGPU) Reserve(_ context.Context, _ *framework.CycleState, pod *v1.Pod, _ string) *framework.Status {
+	queueName := pl.registry.ResolveQueue(pod)
+	pl.registry.mu.Lock()
+	defer pl.registry.mu.Unlock()
+	q := FindQueue(pl.registry.tree, queueName)
+	if q == nil {
+		return nil
+	}
+	if q.Allocated == nil {
+		q.Allocated = fairshare.ResourceVec{}
+	}
+	q.Allocated[GPUResourceName] += float64(podGPURequest(pod))
+	return nil
+}
+
+// Unreserve rolls back a Reserve.
+func (pl *FairShareGPU) Unreserve(_ context.Context, _ *framework.CycleState, pod *v1.Pod, _ string) {
+	queueName := pl.registry.ResolveQueue(pod)
+	pl.registry.mu.Lock()
+	defer pl.registry.mu.Unlock()
+	q := FindQueue(pl.registry.tree, queueName)
+	if q == nil || q.Allocated == nil {
+		return
+	}
+	q.Allocated[GPUResourceName] -= float64(podGPURequest(pod))
+	if q.Allocated[GPUResourceName] < 0 {
+		q.Allocated[GPUResourceName] = 0
+	}
+}
+
+// gatherCandidates builds victim candidates from the nodes that failed filtering.
+func (pl *FairShareGPU) gatherCandidates(filtered framework.NodeToStatusMap) []VictimCandidate {
+	if pl.handle == nil {
+		return nil
+	}
+	lister := pl.handle.SnapshotSharedLister()
+	if lister == nil {
+		return nil
+	}
+	infos, err := lister.NodeInfos().List()
+	if err != nil {
+		return nil
+	}
+	var out []VictimCandidate
+	tree := pl.registry.Tree()
+	for _, info := range infos {
+		if info == nil || info.Node() == nil {
+			continue
+		}
+		nodeName := info.Node().Name
+		if len(filtered) > 0 {
+			if _, failed := filtered[nodeName]; !failed {
+				continue
+			}
+		}
+		for _, pi := range info.Pods {
+			if pi.Pod == nil {
+				continue
+			}
+			out = append(out, pl.candidateFor(pi.Pod, nodeName, tree))
+		}
+	}
+	return out
+}
+
+func (pl *FairShareGPU) candidateFor(p *v1.Pod, nodeName string, tree *fairshare.QueueNode) VictimCandidate {
+	qName := pl.registry.ResolveQueue(p)
+	q := FindQueue(tree, qName)
+	alloc, guar := 0.0, 0.0
+	preemptible := true
+	if q != nil {
+		alloc = q.Allocated[GPUResourceName]
+		guar = q.Guaranteed[GPUResourceName]
+		preemptible = q.Preemptible
+	}
+	var start time.Time
+	if p.Status.StartTime != nil {
+		start = p.Status.StartTime.Time
+	}
+	var prio int32
+	if p.Spec.Priority != nil {
+		prio = *p.Spec.Priority
+	}
+	return VictimCandidate{
+		PodName:         p.Name,
+		NodeName:        nodeName,
+		Queue:           qName,
+		Priority:        prio,
+		StartTime:       start,
+		GPUs:            podGPURequest(p),
+		QueueAllocated:  alloc,
+		QueueGuaranteed: guar,
+		Preemptible:     preemptible,
+	}
+}
+
+func victimNode(victims []VictimCandidate) string {
+	if len(victims) == 0 {
+		return ""
+	}
+	freed := map[string]int{}
+	for _, v := range victims {
+		freed[v.NodeName] += v.GPUs
+	}
+	best := ""
+	bestFreed := -1
+	for node, g := range freed {
+		if g > bestFreed || (g == bestFreed && node < best) {
+			best = node
+			bestFreed = g
+		}
+	}
+	return best
+}
+
+// podGPURequest sums the nvidia.com/gpu requests across a pod's containers.
+func podGPURequest(pod *v1.Pod) int {
 	total := 0
-	for _, container := range pod.Spec.Containers {
-		if val, ok := container.Resources.Requests[v1.ResourceName("nvidia.com/gpu")]; ok {
-			total += int(val.Value())
+	for _, c := range pod.Spec.Containers {
+		if q, ok := c.Resources.Requests[v1.ResourceName(GPUResourceName)]; ok {
+			total += int(q.Value())
 		}
 	}
 	if total == 0 {
 		return 1
 	}
 	return total
+}
+
+// freeGPUsOnNode reports free GPU capacity considering already-assigned pods.
+func freeGPUsOnNode(node *v1.Node, nodeInfo *framework.NodeInfo) int {
+	total := 0
+	if q, ok := node.Status.Allocatable[v1.ResourceName(GPUResourceName)]; ok {
+		total = int(q.Value())
+	}
+	used := 0
+	if nodeInfo != nil {
+		for _, p := range nodeInfo.Pods {
+			if p.Pod != nil {
+				used += podGPURequest(p.Pod)
+			}
+		}
+	}
+	if total-used < 0 {
+		return 0
+	}
+	return total - used
 }

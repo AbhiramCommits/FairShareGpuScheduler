@@ -17,25 +17,18 @@ limitations under the License.
 package v1alpha1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 var (
-	// SchemeBuilder is used to add go types to the API GroupVersion.
-	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
+	GroupVersion = schema.GroupVersion{Group: "fairshare.io", Version: "v1alpha1"}
 
-	// AddToScheme adds the types in this group-version to the given scheme.
+	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
+
 	AddToScheme = SchemeBuilder.AddToScheme
 )
 
-func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(GroupVersion,
-		&Queue{},
-		&QueueList{},
-		&QueueBinding{},
-		&QueueBindingList{},
-	)
-	metav1.AddToGroupVersion(scheme, GroupVersion)
-	return nil
+func init() {
+	SchemeBuilder.Register(&Queue{}, &QueueList{}, &QueueBinding{}, &QueueBindingList{})
 }
