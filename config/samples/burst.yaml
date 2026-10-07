@@ -1,36 +1,25 @@
-apiVersion: v1
-kind: Namespace
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
 metadata:
-  name: tenant-a
+  name: high-priority
+value: 1000000
+globalDefault: false
+description: "High priority tenant-d jobs."
 ---
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: tenant-b
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: tenant-c
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: tenant-d
----
+# tenant-a baseline: 12 GPUs (its full weighted entitlement on the 24-GPU pool).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: burst-a
+  name: baseline-a
   namespace: tenant-a
 spec:
-  replicas: 4
+  replicas: 6
   selector:
-    matchLabels: {app: burst-a}
+    matchLabels: {app: baseline-a}
   template:
     metadata:
       labels:
-        app: burst-a
+        app: baseline-a
         fairshare.io/queue: tenant-a
     spec:
       schedulerName: fairshare-scheduler
@@ -43,13 +32,40 @@ spec:
           limits:
             nvidia.com/gpu: "2"
 ---
+# tenant-b baseline: 6 GPUs (its guarantee).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baseline-b
+  namespace: tenant-b
+spec:
+  replicas: 3
+  selector:
+    matchLabels: {app: baseline-b}
+  template:
+    metadata:
+      labels:
+        app: baseline-b
+        fairshare.io/queue: tenant-b
+    spec:
+      schedulerName: fairshare-scheduler
+      containers:
+      - name: job
+        image: registry.k8s.io/pause:3.9
+        resources:
+          requests:
+            nvidia.com/gpu: "2"
+          limits:
+            nvidia.com/gpu: "2"
+---
+# tenant-b burst: borrows beyond its guarantee, filling the pool.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: burst-b
   namespace: tenant-b
 spec:
-  replicas: 4
+  replicas: 3
   selector:
     matchLabels: {app: burst-b}
   template:
@@ -68,19 +84,20 @@ spec:
           limits:
             nvidia.com/gpu: "2"
 ---
+# tenant-c baseline: 2 GPUs.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: burst-c
+  name: baseline-c
   namespace: tenant-c
 spec:
   replicas: 2
   selector:
-    matchLabels: {app: burst-c}
+    matchLabels: {app: baseline-c}
   template:
     metadata:
       labels:
-        app: burst-c
+        app: baseline-c
         fairshare.io/queue: tenant-c
     spec:
       schedulerName: fairshare-scheduler
@@ -92,37 +109,3 @@ spec:
             nvidia.com/gpu: "1"
           limits:
             nvidia.com/gpu: "1"
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: burst-d
-  namespace: tenant-d
-spec:
-  replicas: 2
-  selector:
-    matchLabels: {app: burst-d}
-  template:
-    metadata:
-      labels:
-        app: burst-d
-        fairshare.io/queue: tenant-d
-    spec:
-      schedulerName: fairshare-scheduler
-      priorityClassName: high-priority
-      containers:
-      - name: job
-        image: registry.k8s.io/pause:3.9
-        resources:
-          requests:
-            nvidia.com/gpu: "2"
-          limits:
-            nvidia.com/gpu: "2"
----
-apiVersion: scheduling.k8s.io/v1
-kind: PriorityClass
-metadata:
-  name: high-priority
-value: 1000000
-globalDefault: false
-description: "High priority tenant-d jobs."

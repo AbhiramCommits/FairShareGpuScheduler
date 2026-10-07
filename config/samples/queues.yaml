@@ -5,7 +5,7 @@ metadata:
 spec:
   weight: 1
   guaranteed:
-    nvidia.com/gpu: "32"
+    nvidia.com/gpu: "24"
   borrowLimit:
     nvidia.com/gpu: "0"
   reclaimable: false
@@ -19,9 +19,9 @@ spec:
   parent: root
   weight: 4
   guaranteed:
-    nvidia.com/gpu: "8"
+    nvidia.com/gpu: "12"
   borrowLimit:
-    nvidia.com/gpu: "8"
+    nvidia.com/gpu: "24"
   priorityClass: 100
   reclaimable: true
   preemptible: true
@@ -34,9 +34,9 @@ spec:
   parent: root
   weight: 2
   guaranteed:
-    nvidia.com/gpu: "4"
+    nvidia.com/gpu: "6"
   borrowLimit:
-    nvidia.com/gpu: "4"
+    nvidia.com/gpu: "24"
   priorityClass: 100
   reclaimable: true
   preemptible: true
@@ -49,10 +49,10 @@ spec:
   parent: root
   weight: 1
   guaranteed:
-    nvidia.com/gpu: "2"
+    nvidia.com/gpu: "3"
   borrowLimit:
-    nvidia.com/gpu: "2"
-  priorityClass: 100
+    nvidia.com/gpu: "24"
+  priorityClass: 200
   reclaimable: true
   preemptible: true
 ---
@@ -64,10 +64,10 @@ spec:
   parent: root
   weight: 1
   guaranteed:
-    nvidia.com/gpu: "2"
+    nvidia.com/gpu: "3"
   borrowLimit:
-    nvidia.com/gpu: "2"
-  priorityClass: 200
+    nvidia.com/gpu: "24"
+  priorityClass: 300
   reclaimable: true
   preemptible: true
 ---
@@ -75,7 +75,7 @@ apiVersion: fairshare.io/v1alpha1
 kind: QueueBinding
 metadata:
   name: bind-tenant-a
-  namespace: default
+  namespace: tenant-a
 spec:
   queue: tenant-a
   namespace: tenant-a
@@ -84,7 +84,7 @@ apiVersion: fairshare.io/v1alpha1
 kind: QueueBinding
 metadata:
   name: bind-tenant-b
-  namespace: default
+  namespace: tenant-b
 spec:
   queue: tenant-b
   namespace: tenant-b
@@ -93,7 +93,7 @@ apiVersion: fairshare.io/v1alpha1
 kind: QueueBinding
 metadata:
   name: bind-tenant-c
-  namespace: default
+  namespace: tenant-c
 spec:
   queue: tenant-c
   namespace: tenant-c
@@ -102,7 +102,7 @@ apiVersion: fairshare.io/v1alpha1
 kind: QueueBinding
 metadata:
   name: bind-tenant-d
-  namespace: default
+  namespace: tenant-d
 spec:
   queue: tenant-d
   namespace: tenant-d

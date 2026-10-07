@@ -17,6 +17,7 @@ spec:
       containers:
       - name: controller
         image: fairshare-gpu-scheduler:latest
+        imagePullPolicy: IfNotPresent
         command:
         - /bin/controller
         - --metrics-addr=:9090

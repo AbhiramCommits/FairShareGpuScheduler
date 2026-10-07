@@ -1,0 +1,28 @@
+# tenant-d high-priority burst. Applied after tenant-b has borrowed idle
+# capacity, so tenant-d's admission forces the controller to reclaim tenant-b's
+# borrowed GPUs.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: burst-d
+  namespace: tenant-d
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: burst-d}
+  template:
+    metadata:
+      labels:
+        app: burst-d
+        fairshare.io/queue: tenant-d
+    spec:
+      schedulerName: fairshare-scheduler
+      priorityClassName: high-priority
+      containers:
+      - name: job
+        image: registry.k8s.io/pause:3.9
+        resources:
+          requests:
+            nvidia.com/gpu: "2"
+          limits:
+            nvidia.com/gpu: "2"

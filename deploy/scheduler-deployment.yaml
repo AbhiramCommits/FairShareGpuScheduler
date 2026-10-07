@@ -1,3 +1,37 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: scheduler-sa
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fairshare-scheduler-config
+  namespace: kube-system
+data:
+  scheduler-config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1
+    kind: KubeSchedulerConfiguration
+    profiles:
+    - schedulerName: fairshare-scheduler
+      plugins:
+        preFilter:
+          enabled:
+          - name: FairShareGPU
+        filter:
+          enabled:
+          - name: FairShareGPU
+        score:
+          enabled:
+          - name: FairShareGPU
+        postFilter:
+          enabled:
+          - name: FairShareGPU
+        reserve:
+          enabled:
+          - name: FairShareGPU
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,9 +51,16 @@ spec:
       containers:
       - name: scheduler
         image: fairshare-gpu-scheduler:latest
+        imagePullPolicy: IfNotPresent
         command:
         - /bin/scheduler
         - --config=/etc/kubernetes/scheduler/scheduler-config.yaml
+        - --leader-elect=false
+        - --v=2
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
         volumeMounts:
         - name: config
           mountPath: /etc/kubernetes/scheduler
@@ -27,33 +68,3 @@ spec:
       - name: config
         configMap:
           name: fairshare-scheduler-config
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: fairshare-scheduler-config
-  namespace: kube-system
-data:
-  scheduler-config.yaml: |
-    apiVersion: kubescheduler.config.k8s.io/v1
-    kind: KubeSchedulerConfiguration
-    clientConnection:
-      kubeconfig: /etc/kubernetes/scheduler.conf
-    profiles:
-    - schedulerName: fairshare-scheduler
-      plugins:
-        preFilter:
-          enabled:
-          - name: FairShareGPU
-        filter:
-          enabled:
-          - name: FairShareGPU
-        score:
-          enabled:
-          - name: FairShareGPU
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: scheduler-sa
-  namespace: kube-system

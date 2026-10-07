@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package v1alpha1 contains the FairShare queue API types.
+// +groupName=fairshare.io
 package v1alpha1
 
 import (

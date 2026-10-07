@@ -48,28 +48,35 @@ var _ framework.ScorePlugin = &FairShareGPU{}
 var _ framework.PostFilterPlugin = &FairShareGPU{}
 var _ framework.ReservePlugin = &FairShareGPU{}
 
+// defaultRegistry is the process-wide registry shared by all plugin instances
+// and kept up to date from the Kubernetes API by the scheduler's sync loop.
+var defaultRegistry = NewRegistry()
+
+// DefaultRegistry returns the shared registry used by the plugin.
+func DefaultRegistry() *Registry { return defaultRegistry }
+
 // New constructs the plugin. It satisfies the framework.PluginFactory signature
 // used by app.WithPlugin.
 func New(_ context.Context, _ runtime.Object, handle framework.Handle) (framework.Plugin, error) {
-	reg := NewRegistry()
-	root := fairshare.QueueSpec{
-		Name:        "root",
-		Weight:      1,
-		Guaranteed:  fairshare.ResourceVec{GPUResourceName: 32},
-		BorrowLimit: fairshare.ResourceVec{GPUResourceName: 32},
+	if defaultRegistry.Tree() == nil {
+		root := fairshare.QueueSpec{
+			Name:        "root",
+			Weight:      1,
+			Guaranteed:  fairshare.ResourceVec{GPUResourceName: 32},
+			BorrowLimit: fairshare.ResourceVec{GPUResourceName: 32},
+		}
+		def := fairshare.QueueSpec{
+			Name:        "default-queue",
+			Parent:      "root",
+			Weight:      1,
+			Guaranteed:  fairshare.ResourceVec{GPUResourceName: 32},
+			BorrowLimit: fairshare.ResourceVec{GPUResourceName: 32},
+			Preemptible: true,
+			Reclaimable: true,
+		}
+		_ = defaultRegistry.SetQueues([]fairshare.QueueSpec{root, def})
 	}
-	def := fairshare.QueueSpec{
-		Name:        "default-queue",
-		Parent:      "root",
-		Weight:      1,
-		Guaranteed:  fairshare.ResourceVec{GPUResourceName: 32},
-		BorrowLimit: fairshare.ResourceVec{GPUResourceName: 32},
-		Preemptible: true,
-		Reclaimable: true,
-	}
-	_ = reg.SetQueues([]fairshare.QueueSpec{root, def})
-	reg.SetCapacity(fairshare.ResourceVec{GPUResourceName: 0})
-	return &FairShareGPU{handle: handle, registry: reg}, nil
+	return &FairShareGPU{handle: handle, registry: defaultRegistry}, nil
 }
 
 // Registry exposes the plugin's shared state for external configuration and tests.
@@ -269,15 +276,14 @@ func victimNode(victims []VictimCandidate) string {
 }
 
 // podGPURequest sums the nvidia.com/gpu requests across a pod's containers.
+// Pods that request no GPU return 0 so they do not consume extended resource
+// capacity during filtering.
 func podGPURequest(pod *v1.Pod) int {
 	total := 0
 	for _, c := range pod.Spec.Containers {
 		if q, ok := c.Resources.Requests[v1.ResourceName(GPUResourceName)]; ok {
 			total += int(q.Value())
 		}
-	}
-	if total == 0 {
-		return 1
 	}
 	return total
 }
