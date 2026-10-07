@@ -1,0 +1,21 @@
+apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+clientConnection:
+  kubeconfig: /etc/kubernetes/scheduler.conf
+profiles:
+- schedulerName: fairshare-scheduler
+  plugins:
+    preFilter:
+      enabled:
+      - name: FairShareGPU
+    filter:
+      enabled:
+      - name: FairShareGPU
+    score:
+      enabled:
+      - name: FairShareGPU
+  pluginConfig:
+  - name: FairShareGPU
+    args:
+      apiVersion: kubescheduler.config.k8s.io/v1
+      kind: FairShareGPUArgs
