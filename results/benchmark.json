@@ -1,0 +1,136 @@
+{
+  "generatedBy": "cmd/bench",
+  "traceFile": "testdata/trace.json",
+  "seed": 20240117,
+  "results": [
+    {
+      "scheduler": "fifo",
+      "jobsTotal": 850,
+      "jobsCompleted": 331,
+      "gpuAllocationRatioMean": 0.9990973194012392,
+      "gpuAllocationRatioPeak": 1,
+      "waitP50Seconds": 14525.940965628608,
+      "waitP95Seconds": 62197.0340697486,
+      "perTenantWait": {
+        "tenant-a": {
+          "p50Seconds": 11456.046491178658,
+          "p95Seconds": 50324.00676337884,
+          "maxSeconds": 61636.36093630266,
+          "jobs": 122
+        },
+        "tenant-b": {
+          "p50Seconds": 10122.688144117385,
+          "p95Seconds": 53102.237926836686,
+          "maxSeconds": 61490.798480610654,
+          "jobs": 79
+        },
+        "tenant-c": {
+          "p50Seconds": 12831.417803266875,
+          "p95Seconds": 59377.62340514879,
+          "maxSeconds": 62197.03406974862,
+          "jobs": 62
+        },
+        "tenant-d": {
+          "p50Seconds": 34569.53275997257,
+          "p95Seconds": 77156.77051732242,
+          "maxSeconds": 82640.1835146727,
+          "jobs": 78
+        }
+      },
+      "makespanSeconds": 88493.5002065985,
+      "fairnessDeviation": 0.5108602343611118,
+      "fairnessDeviationPeak": 0.875,
+      "jainIndex": 0.5524314761146096,
+      "tenantShare": {
+        "tenant-a": 0.17045728704883922,
+        "tenant-b": 0.11123636185342672,
+        "tenant-c": 0.08244611673662225,
+        "tenant-d": 0.6358602343611118
+      },
+      "preemptions": 0,
+      "reclaims": 0,
+      "starvationMaxWaitSeconds": 61636.36093630266,
+      "lowestPriorityTenant": "tenant-a"
+    },
+    {
+      "scheduler": "default-binpack",
+      "jobsTotal": 850,
+      "jobsCompleted": 123,
+      "gpuAllocationRatioMean": 0.999222010327698,
+      "gpuAllocationRatioPeak": 1,
+      "waitP50Seconds": 42445.051498723136,
+      "waitP95Seconds": 76753.48647913015,
+      "perTenantWait": {
+        "tenant-d": {
+          "p50Seconds": 42445.051498723136,
+          "p95Seconds": 76753.48647913015,
+          "maxSeconds": 81011.86470827767,
+          "jobs": 127
+        }
+      },
+      "makespanSeconds": 89451.1158752188,
+      "fairnessDeviation": 0.875,
+      "fairnessDeviationPeak": 0.875,
+      "jainIndex": 0.25,
+      "tenantShare": {
+        "tenant-a": 0,
+        "tenant-b": 0,
+        "tenant-c": 0,
+        "tenant-d": 1
+      },
+      "preemptions": 0,
+      "reclaims": 0,
+      "starvationMaxWaitSeconds": 85909.85620743256,
+      "lowestPriorityTenant": "tenant-a"
+    },
+    {
+      "scheduler": "fairshare",
+      "jobsTotal": 850,
+      "jobsCompleted": 456,
+      "gpuAllocationRatioMean": 0.9891264183174937,
+      "gpuAllocationRatioPeak": 1,
+      "waitP50Seconds": 1428.3019685522886,
+      "waitP95Seconds": 21735.155896487988,
+      "perTenantWait": {
+        "tenant-a": {
+          "p50Seconds": 784.3376947941124,
+          "p95Seconds": 10557.673412230584,
+          "maxSeconds": 17688.30268059556,
+          "jobs": 212
+        },
+        "tenant-b": {
+          "p50Seconds": 1043.6420197031257,
+          "p95Seconds": 9601.448902171975,
+          "maxSeconds": 30436.838189136484,
+          "jobs": 133
+        },
+        "tenant-c": {
+          "p50Seconds": 3606.696104560513,
+          "p95Seconds": 19853.87941351166,
+          "maxSeconds": 39908.29031531539,
+          "jobs": 94
+        },
+        "tenant-d": {
+          "p50Seconds": 10491.895198153583,
+          "p95Seconds": 75363.91044218921,
+          "maxSeconds": 82314.89033848686,
+          "jobs": 48
+        }
+      },
+      "makespanSeconds": 89042.48209189712,
+      "fairnessDeviation": 0.14596334247067538,
+      "fairnessDeviationPeak": 0.875,
+      "jainIndex": 0.906194731642023,
+      "tenantShare": {
+        "tenant-a": 0.3633129464600767,
+        "tenant-b": 0.22519710801970186,
+        "tenant-c": 0.14052660304954603,
+        "tenant-d": 0.2709633424706754
+      },
+      "preemptions": 17,
+      "reclaims": 1,
+      "starvationMaxWaitSeconds": 18222.062346496125,
+      "lowestPriorityTenant": "tenant-a"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+FairShare GPU scheduler benchmark (deterministic trace)
+trace=testdata/trace.json seed=20240117 jobs=850
+
+scheduler             alloc   p50(s)   p95(s)  maxwait     jain      dev   makespan preempt   recl   done
+fifo                  0.999  14525.9  62197.0  61636.4   0.5524   0.5109    88493.5       0      0    331
+default-binpack       0.999  42445.1  76753.5  85909.9   0.2500   0.8750    89451.1       0      0    123
+fairshare             0.989   1428.3  21735.2  18222.1   0.9062   0.1460    89042.5      17      1    456

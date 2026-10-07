@@ -44,4 +44,9 @@ kind-down:
 
 .PHONY: bench
 bench:
+	$(GO) run hack/trace-gen.go
 	$(GO) run cmd/bench/main.go
+
+.PHONY: trace
+trace:
+	$(GO) run hack/trace-gen.go
