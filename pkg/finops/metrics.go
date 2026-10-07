@@ -24,6 +24,7 @@ import (
 )
 
 var (
+	// QueueGPUsAllocated reports GPUs currently allocated per queue.
 	QueueGPUsAllocated = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "fairshare_queue_gpus_allocated",
@@ -32,6 +33,7 @@ var (
 		[]string{"queue"},
 	)
 
+	// QueueGPUsGuaranteed reports the guaranteed GPUs per queue.
 	QueueGPUsGuaranteed = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "fairshare_queue_gpus_guaranteed",
@@ -40,6 +42,7 @@ var (
 		[]string{"queue"},
 	)
 
+	// QueueGPUsBorrowed reports borrowed GPUs per queue.
 	QueueGPUsBorrowed = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "fairshare_queue_gpus_borrowed",
@@ -48,6 +51,7 @@ var (
 		[]string{"queue"},
 	)
 
+	// QueueGPUsLent reports lent GPUs per queue.
 	QueueGPUsLent = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "fairshare_queue_gpus_lent",
@@ -56,6 +60,7 @@ var (
 		[]string{"queue"},
 	)
 
+	// QueueGpuHoursTotal counts cumulative GPU-hours per queue.
 	QueueGpuHoursTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "fairshare_queue_gpu_hours_total",
@@ -64,6 +69,7 @@ var (
 		[]string{"queue"},
 	)
 
+	// QueueGpuIdleHoursTotal counts cumulative idle guaranteed GPU-hours per queue.
 	QueueGpuIdleHoursTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "fairshare_queue_gpu_idle_hours_total",
@@ -72,6 +78,7 @@ var (
 		[]string{"queue"},
 	)
 
+	// QueueCostUsdTotal counts cumulative USD cost per queue.
 	QueueCostUsdTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "fairshare_queue_cost_usd_total",
@@ -80,6 +87,7 @@ var (
 		[]string{"queue"},
 	)
 
+	// QueuePendingPods reports pending pods per queue.
 	QueuePendingPods = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "fairshare_queue_pending_pods",
@@ -88,6 +96,7 @@ var (
 		[]string{"queue"},
 	)
 
+	// PreemptionsTotal counts preemption events per queue and reason.
 	PreemptionsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "fairshare_preemptions_total",
@@ -96,6 +105,7 @@ var (
 		[]string{"queue", "reason"},
 	)
 
+	// ReclaimsTotal counts reclaim events per queue.
 	ReclaimsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "fairshare_reclaims_total",
@@ -104,6 +114,7 @@ var (
 		[]string{"queue"},
 	)
 
+	// SchedulingLatencySeconds observes scheduling decision latency.
 	SchedulingLatencySeconds = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "fairshare_scheduling_latency_seconds",
@@ -130,6 +141,7 @@ func init() {
 	)
 }
 
+// MetricsHandler returns the HTTP handler exposing the FinOps metrics registry.
 func MetricsHandler() http.Handler {
 	return promhttp.Handler()
 }

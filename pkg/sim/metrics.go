@@ -84,14 +84,9 @@ func summarizeWaits(byTenant map[string][]float64) map[string]TenantWait {
 	return out
 }
 
-// fairness computes the maximum absolute deviation between each tenant's actual
-// share of consumed GPU-seconds and its weighted entitlement, plus Jain's index.
-func fairness(trace Trace, tenantGpuSeconds map[string]float64) (deviation, jain float64) {
-	deviation, jain, _ = fairnessDetailed(trace, tenantGpuSeconds)
-	return deviation, jain
-}
-
-// fairnessDetailed additionally returns each tenant's actual GPU-second share.
+// fairnessDetailed computes the maximum absolute deviation between each tenant's
+// actual share of consumed GPU-seconds and its weighted entitlement, Jain's
+// index, and each tenant's actual share.
 func fairnessDetailed(trace Trace, tenantGpuSeconds map[string]float64) (deviation, jain float64, shares map[string]float64) {
 	shares = map[string]float64{}
 	total := 0.0

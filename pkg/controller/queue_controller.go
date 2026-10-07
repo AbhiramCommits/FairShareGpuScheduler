@@ -85,7 +85,6 @@ func (r *QueueReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	allocatedGPUs := 0.0
 	pendingCount := int32(0)
 	pendingGPUs := 0.0
-	var queuePods []queuePod
 
 	for _, pod := range podList.Items {
 		qName := pod.Labels["fairshare.io/queue"]
@@ -105,14 +104,6 @@ func (r *QueueReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			pendingCount++
 			pendingGPUs += float64(podGPUs)
 		}
-		var startTime time.Time
-		if pod.Status.StartTime != nil {
-			startTime = pod.Status.StartTime.Time
-		}
-		queuePods = append(queuePods, queuePod{
-			Name: pod.Name, Namespace: pod.Namespace, Queue: qName,
-			GPUs: podGPUs, Running: pod.Status.Phase == v1.PodRunning, StartTime: startTime,
-		})
 	}
 
 	guaranteedGPUs := 0.0
@@ -156,7 +147,9 @@ func (r *QueueReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 }
 
 // reclaimForQueue evicts newest borrowed pods from over-quota queues.
-func (r *QueueReconciler) reclaimForQueue(ctx context.Context, logger interface{ Error(error, string, ...interface{}) }, queueName string, needGPUs float64) (int, error) {
+func (r *QueueReconciler) reclaimForQueue(ctx context.Context, logger interface {
+	Error(error, string, ...interface{})
+}, queueName string, needGPUs float64) (int, error) {
 	var queues fairsharev1alpha1.QueueList
 	if err := r.List(ctx, &queues); err != nil {
 		return 0, err

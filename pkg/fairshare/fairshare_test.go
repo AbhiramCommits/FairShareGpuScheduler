@@ -74,9 +74,10 @@ func TestDRFRankingAndShares(t *testing.T) {
 
 	// Allocate to a and b
 	for _, child := range root.Children {
-		if child.Name == "a" {
+		switch child.Name {
+		case "a":
 			child.Allocated = ResourceVec{"nvidia.com/gpu": 2, "memory": 16}
-		} else if child.Name == "b" {
+		case "b":
 			child.Allocated = ResourceVec{"nvidia.com/gpu": 3, "memory": 32}
 		}
 	}

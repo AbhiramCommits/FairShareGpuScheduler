@@ -593,14 +593,6 @@ func preemptLoop(pendings *[]pending, runnings *[]running, nodes []*node, now fl
 	*pendings = append((*pendings)[:best], (*pendings)[best+1:]...)
 }
 
-func headOf(pendings []pending, tenant string) int {
-	idx := jobsOf(pendings, tenant)
-	if len(idx) == 0 {
-		return -1
-	}
-	return idx[0]
-}
-
 // jobsOf returns the indices of a tenant's pending jobs in arrival order.
 func jobsOf(pendings []pending, tenant string) []int {
 	var idx []int
